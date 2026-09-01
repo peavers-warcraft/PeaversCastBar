@@ -21,6 +21,7 @@ local Secret = PCB.Secret
 local CooldownManager = PCB.CooldownManager
 
 local Safe = Secret.Safe
+local IsSecret = Secret.IsSecret
 local ReadBool = Secret.ReadBool
 local Present = Secret.Present
 local Number = Secret.Number
@@ -384,7 +385,7 @@ end
 -- only truth-tested, never compared, and notInterruptible goes through ReadBool
 -- because a secret boolean cannot legally be tested at all.
 local function ReadCast(unit)
-    local name, text, texture, startTime, endTime, _, _, notInterruptible = Safe(UnitCastingInfo, unit)
+    local name, text, texture, startTime, endTime, _, castID, notInterruptible = Safe(UnitCastingInfo, unit)
     if Present(name) then
         return {
             name = text or name,
@@ -393,6 +394,7 @@ local function ReadCast(unit)
             endTime = endTime,
             notInterruptible = ReadBool(notInterruptible),
             channeling = false,
+            castID = castID,
         }
     end
 
@@ -455,6 +457,7 @@ function CastBar:Refresh()
     end
 
     self.cast = cast
+    self.castID = cast.castID
     self.fading = nil
     self.failed = nil
     self.frame:SetAlpha(1)
@@ -577,6 +580,7 @@ function CastBar:Hide()
     self.failed = nil
     self.lastTenths = nil
     self.cast = nil
+    self.castID = nil
     self.mode = nil
     self:ClearSecretTimer()
     self.spark:Hide()
@@ -603,6 +607,7 @@ function CastBar:ShowPreview()
     self.previewing = true
     self.mode = nil
     self.cast = nil
+    self.castID = nil
     self.fading = nil
     self.failed = nil
     self.lastTenths = nil
@@ -688,13 +693,35 @@ function CastBar:OnUpdate(elapsed)
     end
 end
 
+-- True when this event belongs to some other cast attempt than the one on the
+-- bar, and must not be allowed to end it.
+--
+-- This matters most for UNIT_SPELLCAST_FAILED. It fires for every rejected cast
+-- attempt on the unit, not only the one being displayed, so hammering a spell
+-- key during a cast produces a stream of failures belonging to presses that
+-- never started. Without this check each of those turned the running bar red and
+-- stopped it, while the real cast carried on invisibly underneath.
+--
+-- Unknowns deliberately fall through as "mine": channels carry no cast GUID at
+-- all, and a restricted GUID cannot legally be compared. Both cases keep the old
+-- behaviour of trusting the event rather than risking a bar that never clears.
+function CastBar:IsForeignCast(castGUID)
+    local mine = self.castID
+    if mine == nil or castGUID == nil then return false end
+    if IsSecret(mine) or IsSecret(castGUID) then return false end
+    return mine ~= castGUID
+end
+
 -- Every spellcast event for the unit funnels through here. Re-reading the unit
--- is cheaper and far less error prone than tracking cast IDs by hand.
-function CastBar:OnEvent(event)
+-- is cheaper and far less error prone than tracking timings by hand; only the
+-- identity of the cast is tracked, and only to reject events from other casts.
+function CastBar:OnEvent(event, _, castGUID)
     if event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+        if self:IsForeignCast(castGUID) then return end
         self:Stop(true)
     elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
         or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+        if self:IsForeignCast(castGUID) then return end
         self:Stop()
     else
         self:Refresh()

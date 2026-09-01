@@ -93,8 +93,11 @@ function Core:CreateBars()
         local bar = CastBar.New(unit.key)
 
         local eventFrame = CreateFrame("Frame")
-        eventFrame:SetScript("OnEvent", function(_, event)
-            bar:OnEvent(event)
+        -- The payload matters: every spellcast event carries the cast GUID it
+        -- belongs to, which is the only way to tell this bar's cast apart from
+        -- another attempt on the same unit.
+        eventFrame:SetScript("OnEvent", function(_, event, ...)
+            bar:OnEvent(event, ...)
         end)
         bar.eventFrame = eventFrame
 
