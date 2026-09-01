@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: PeaversCastBar
+  description: "A World of Warcraft addon that replaces the default cast bars for player, target, focus and pet, with optional width and position matching against Blizzard's Cooldown Manager."
+  annotations:
+    github.com/project-slug: peavers-warcraft/PeaversCastBar
+spec:
+  type: library
+  lifecycle: production
+  owner: peavers-warcraft

@@ -1,0 +1,28 @@
+## Interface: 120001, 120005, 120007, 120100
+
+## Title: |cff3abdf7Peavers|rCastBar
+## Notes: A clean cast bar for player, target, focus and pet that can match your Cooldown Manager width
+## Author: Peavers
+## Version: 1.0.0
+
+## IconTexture: Interface\AddOns\PeaversCommons\src\Media\Icon.tga
+## Category-enUS: Peavers
+
+## X-Website: https://peavers.io
+## X-Source-Code: https://github.com/peavers-warcraft/PeaversCastBar
+
+## Dependencies: PeaversCommons, PeaversConfig
+## SavedVariables: PeaversCastBarDB
+
+Changelog.lua
+
+src\Core\Secret.lua
+src\Core\Blizzard.lua
+src\Core\CooldownManager.lua
+src\Utils\Config.lua
+src\UI\CastBar.lua
+src\Core\Core.lua
+src\Utils\ConfigUI.lua
+src\Utils\Patrons.lua
+
+src\Main.lua
