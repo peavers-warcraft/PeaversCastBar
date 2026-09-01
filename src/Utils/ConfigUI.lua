@@ -481,15 +481,6 @@ function ConfigUI:BuildAppearancePage(parentFrame)
         end,
     }), 52)
 
-    if ConfigUIUtils and ConfigUIUtils.CreateGlobalAppearanceSection then
-        local _, newY = ConfigUIUtils.CreateGlobalAppearanceSection(parentFrame, addonName, PCB, INDENT, y,
-            function()
-                PCB.Core:ApplyConfig()
-                ConfigUI:Rebuild()
-            end)
-        y = newY
-    end
-
     updatingUI = false
 
     parentFrame:SetHeight(math.abs(y) + 30)
