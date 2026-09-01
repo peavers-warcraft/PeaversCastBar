@@ -1,7 +1,7 @@
 ## Interface: 120001, 120005, 120007, 120100
 
 ## Title: |cff3abdf7Peavers|rCastBar
-## Notes: A clean cast bar for player, target, focus and pet that can match your Cooldown Manager width
+## Notes: Ultra-lightweight cast bars for player, target, focus and pet. One widget call a frame while casting, nothing at all when idle, and they can match your Cooldown Manager width.
 ## Author: Peavers
 ## Version: 1.0.0
 
@@ -10,6 +10,7 @@
 
 ## X-Website: https://peavers.io
 ## X-Source-Code: https://github.com/peavers-warcraft/PeaversCastBar
+## X-Curse-Project-ID: 1677151
 
 ## Dependencies: PeaversCommons, PeaversConfig
 ## SavedVariables: PeaversCastBarDB

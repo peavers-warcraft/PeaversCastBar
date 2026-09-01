@@ -61,7 +61,7 @@ PeaversCommons.Events:Init(addonName, function()
         PeaversCommons.ConfigRegistry:Register({
             name = "PeaversCastBar",
             displayName = "Cast Bar",
-            description = "A clean cast bar that can match your Cooldown Manager",
+            description = "Ultra-lightweight cast bars that can match your Cooldown Manager",
             addonRef = PCB,
             config = PCB.Config,
             pages = PCB.ConfigUI:GetPages(),

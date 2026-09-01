@@ -503,9 +503,9 @@ function ConfigUI:BuildInfoPage(parentFrame)
     local width = ResolveWidth(parentFrame)
 
     ConfigUIUtils.BuildInfoPage(parentFrame, "Cast Bar", {
-        "A clean replacement for the default cast bar, for the player, target, " ..
-            "focus and pet - with the option to take its width straight from " ..
-            "Blizzard's Cooldown Manager so the two line up exactly.",
+        "An ultra-lightweight replacement for the default cast bar, for the " ..
+            "player, target, focus and pet - with the option to take its width " ..
+            "straight from Blizzard's Cooldown Manager so the two line up exactly.",
 
         { command = "/pcb", desc = "open the settings" },
         { command = "/pcb unlock", desc = "show every bar so it can be dragged" },
@@ -527,6 +527,14 @@ function ConfigUI:BuildInfoPage(parentFrame)
         { header = "Blizzard's own bars" },
         "Each unit hands its default cast bar over when you enable it, and " ..
             "hands it straight back when you turn it off - no reload needed.",
+
+        { header = "Built for performance" },
+        "A bar costs one widget call per frame while something is casting, and " ..
+            "nothing at all the rest of the time - hidden frames are never " ..
+            "ticked, and events are filtered by the client rather than by Lua. " ..
+            "Progress is read from the game clock instead of accumulated frame " ..
+            "times, so a stutter can never drift the bar out of step with the " ..
+            "cast. The whole addon is around 80 KB with no bundled libraries.",
     })
 
     -- Sits under the generated blocks; BuildInfoPage leaves the height set, so

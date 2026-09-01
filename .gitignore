@@ -1,3 +1,6 @@
 .idea
 *.iml
 .DS_Store
+
+# Screen recordings dropped in the addon root must never reach a release.
+*.mp4
