@@ -1,32 +1,54 @@
 # PeaversCastBar
 
+[![Ultra Performance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/peavers-warcraft/PeaversCastBar/master/.github/badges/perf.json)](https://github.com/peavers-warcraft/PeaversCastBar/actions/workflows/perf.yml)
 [![AddonSentry](https://addonsentry.io/api/public/repos/peavers-warcraft/PeaversCastBar/badge.svg)](https://addonsentry.io/dashboard/peavers-warcraft/PeaversCastBar)
 
 An ultra-lightweight replacement for the default cast bars — player, target, focus and pet — that can take its width and position straight from Blizzard's Cooldown Manager.
 
-**~80 KB. No bundled libraries. One widget call a frame while casting, and nothing at all when idle.**
+**~80 KB. No bundled libraries. Around one client call per frame while casting, and nothing at all when idle.**
 
-Part of the **Peavers Ultra Performance** family: addons that do one job, do it exactly, and stay out of your frame budget.
+Part of the **Peavers Ultra Performance** family: addons that hold themselves to a published budget, measured on every push.
 
 ## Built for performance
 
-Cast bars run every single frame, so this one is measured rather than assumed. Every number below comes from driving the real code through a full cast against instrumented widget stubs:
+Cast bars run every single frame, so this one is measured rather than assumed.
+The table below is regenerated on every push by the
+[Ultra Performance harness](https://github.com/peavers-code/peavers-warcraft-workflows/tree/master/perf-harness),
+which loads this addon's real source into a Lua VM, drives its own `OnUpdate`
+through a full cast, and counts what it actually asked the client to do. If any
+number goes outside `perf/budget.json`, the build fails.
 
-| | |
-|---|---|
-| Widget calls per frame while casting | **1** (`SetValue` — the animation itself) |
-| Widget calls while idle | **0** — a hidden frame gets no `OnUpdate` at all |
-| Countdown text rebuilds | **10/sec**, not once per frame |
-| Fill drift from true cast time | **0.000%**, even under stuttering frame times |
-| Packaged size | **~80 KB**, no libraries bundled |
+<!-- perf:begin -->
+
+> Measured on every push by the Ultra Performance harness. The build fails if any number here exceeds the budget in `perf/budget.json`.
+
+| Check | Measured | Budget | |
+|---|---:|---:|:--:|
+| Packaged size | 80.4 KB | 100 KB | pass |
+| Bundled libraries | 0 | 0 | pass |
+| Widget calls per frame | 1.17 | 1.25 | pass |
+| Widget calls per second while idle | 0 | 0 | pass |
+
+Scenarios driven against the real addon source, outside the game:
+
+| Scenario | Widget calls/frame | Notes |
+|---|---:|---|
+| player cast, 2.5s at 144fps | 1.07 | 358 frames driven |
+| player cast, 2.5s at 60fps | 1.17 | 148 frames driven |
+| channel, 3s at 144fps | 1.07 | 430 frames driven |
+| idle, nothing casting | 0.00 | frame hidden, never ticked |
+
+<sub>2,231 lines of Lua · 80.4 KB packaged · no bundled libraries</sub>
+
+<!-- perf:end -->
 
 How it gets there:
 
 - **The spark costs nothing.** It rides the right edge of the status bar's own fill texture, so the client moves it while resizing the fill. No per-frame anchoring.
-- **The countdown only redraws when it changes.** The label shows one decimal, so the string is rebuilt ten times a second instead of once per frame — every `SetText` forces a font string to re-measure.
+- **The countdown only redraws when it changes.** The label shows one decimal, so the string is rebuilt ten times a second instead of once per frame — every `SetText` forces a font string to re-measure. That redraw is why the per-frame figure sits just above 1.0 rather than exactly at it, and why it is higher at 60fps than at 144.
 - **The clock is the clock.** Progress is computed from `GetTime()`, never accumulated frame deltas, so a stutter or a frame drop cannot make the bar drift out of step with the cast.
 - **Events are filtered by the client, not by Lua.** Each bar registers with `RegisterUnitEvent`, so an idle raid never wakes the addon up for units it isn't showing.
-- **Nothing runs when nothing is casting.** The bars are genuinely hidden, and WoW does not tick hidden frames.
+- **Nothing runs when nothing is casting.** The bars are genuinely hidden, and WoW does not tick hidden frames — which is measured above, not merely asserted.
 
 ## Features
 

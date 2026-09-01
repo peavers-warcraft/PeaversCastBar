@@ -529,12 +529,14 @@ function ConfigUI:BuildInfoPage(parentFrame)
             "hands it straight back when you turn it off - no reload needed.",
 
         { header = "Built for performance" },
-        "A bar costs one widget call per frame while something is casting, and " ..
-            "nothing at all the rest of the time - hidden frames are never " ..
-            "ticked, and events are filtered by the client rather than by Lua. " ..
-            "Progress is read from the game clock instead of accumulated frame " ..
-            "times, so a stutter can never drift the bar out of step with the " ..
-            "cast. The whole addon is around 80 KB with no bundled libraries.",
+        "A bar costs about one client call per frame while something is " ..
+            "casting, and nothing at all the rest of the time - hidden frames " ..
+            "are never ticked, and events are filtered by the client rather " ..
+            "than by Lua. Progress is read from the game clock instead of " ..
+            "accumulated frame times, so a stutter can never drift the bar out " ..
+            "of step with the cast. The whole addon is around 80 KB with no " ..
+            "bundled libraries. Every one of those numbers is re-measured on " ..
+            "each release and published in the README.",
     })
 
     -- Sits under the generated blocks; BuildInfoPage leaves the height set, so
