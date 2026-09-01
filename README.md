@@ -24,21 +24,21 @@ number goes outside `perf/budget.json`, the build fails.
 
 | Check | Measured | Budget | |
 |---|---:|---:|:--:|
-| Packaged size | 80.4 KB | 100 KB | pass |
+| Packaged size | 79.6 KB | 100 KB | pass |
 | Bundled libraries | 0 | 0 | pass |
 | Widget calls per frame | 1.17 | 1.25 | pass |
 | Widget calls per second while idle | 0 | 0 | pass |
 
 Scenarios driven against the real addon source, outside the game:
 
-| Scenario | Widget calls/frame | Notes |
+| Scenario | Calls/frame | Notes |
 |---|---:|---|
 | player cast, 2.5s at 144fps | 1.07 | 358 frames driven |
 | player cast, 2.5s at 60fps | 1.17 | 148 frames driven |
 | channel, 3s at 144fps | 1.07 | 430 frames driven |
 | idle, nothing casting | 0.00 | frame hidden, never ticked |
 
-<sub>2,231 lines of Lua · 80.4 KB packaged · no bundled libraries</sub>
+<sub>2,231 lines of Lua · 79.6 KB packaged · no bundled libraries</sub>
 
 <!-- perf:end -->
 
