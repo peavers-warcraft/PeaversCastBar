@@ -434,6 +434,7 @@ function CastBar:Refresh()
 
     self.cast = cast
     self.fading = nil
+    self.failed = nil
     self.frame:SetAlpha(1)
 
     -- notInterruptible is true / false / nil, where nil means the client would
@@ -504,6 +505,17 @@ function CastBar:Refresh()
     self.frame:Show()
 end
 
+function CastBar:MarkFailed()
+    if self.failed then return end
+    self.failed = true
+
+    -- The bar is deliberately left at whatever value it reached. Snapping it to
+    -- full on the way out turns a cancelled cast into a red bar that appears to
+    -- flash, and it also lies about how far the cast actually got.
+    self:SetBarColor("failedColor", { r = 0.85, g = 0.25, b = 0.25 })
+    self.timeText:SetText("")
+end
+
 function CastBar:Stop(failed)
     self.cast = nil
     self.mode = nil
@@ -511,17 +523,26 @@ function CastBar:Stop(failed)
 
     if not self.frame:IsShown() or self.previewing then return end
 
-    if failed then
-        self:SetBarColor("failedColor", { r = 0.85, g = 0.25, b = 0.25 })
-        self.bar:SetValue(select(2, self.bar:GetMinMaxValues()))
-        self.timeText:SetText("")
-    end
+    -- Unconditional, and before the fade guard: the client does not promise
+    -- that INTERRUPTED lands before the plain STOP beside it, so a failure
+    -- arriving second still has to be able to colour a bar already on its way
+    -- out. MarkFailed is idempotent.
+    if failed then self:MarkFailed() end
+
+    -- Cancelling a cast does not produce one event, it produces a burst:
+    -- INTERRUPTED, then STOP, sometimes FAILED as well, over a handful of
+    -- frames. Restarting the fade on each of them snapped the alpha back to
+    -- full every time, which is what read as a red bar pulsing two or three
+    -- times before it finally went away. The first stop to arrive owns the
+    -- fade; nothing restarts it.
+    if self.fading then return end
 
     self.fading = FADE_TIME
 end
 
 function CastBar:Hide()
     self.fading = nil
+    self.failed = nil
     self.cast = nil
     self.mode = nil
     self:ClearSecretTimer()
@@ -550,6 +571,7 @@ function CastBar:ShowPreview()
     self.mode = nil
     self.cast = nil
     self.fading = nil
+    self.failed = nil
     self:ClearSecretTimer()
 
     self.frame:SetAlpha(1)
