@@ -230,6 +230,13 @@ function CastBar:Layout(appearance, unitCfg, unlocked)
     self.bar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -rightPad, INSET)
     self.bar:SetStatusBarTexture(appearance.barTexture or "Interface\\TargetingFrame\\UI-StatusBar")
 
+    -- Derived arithmetically instead of read back with GetWidth. The bar is
+    -- sized by its anchors, and an anchor-derived size is not resolved until the
+    -- client's next layout pass, so GetWidth can still answer 0 here - which
+    -- would silently collapse the latency zone and the empower pips on the very
+    -- first cast after a settings change.
+    self.barWidth = math.max(0, width - leftPad - rightPad)
+
     local bbR, bbG, bbB = Color(appearance.barBgColor, { r = 0.12, g = 0.12, b = 0.14 })
     self.barBg:SetColorTexture(bbR, bbG, bbB, appearance.barBgAlpha or 0.6)
 
@@ -237,6 +244,19 @@ function CastBar:Layout(appearance, unitCfg, unlocked)
     self.latency:SetColorTexture(latR, latG, latB, appearance.latencyAlpha or 0.5)
 
     self.spark:SetSize(16, height * 1.6)
+
+    -- Parked on the right edge of the status bar's own fill texture, which is
+    -- exactly where the cast has reached. The client then moves the spark as it
+    -- resizes the fill, so the per-frame update never has to touch it - this is
+    -- what takes the spark from three widget calls a frame to none. Re-anchored
+    -- on every Layout because SetStatusBarTexture above can hand back a
+    -- different texture object.
+    local fillTexture = self.bar:GetStatusBarTexture()
+    if fillTexture then
+        self.spark:ClearAllPoints()
+        self.spark:SetPoint("CENTER", fillTexture, "RIGHT", 0, 0)
+    end
+
     -- Recomputed rather than blanked: Layout also runs mid-cast, whenever a
     -- matched Cooldown Manager row resizes.
     self.spark:SetShown(self.mode == "manual" and appearance.showSpark ~= false)
@@ -260,7 +280,8 @@ function CastBar:Layout(appearance, unitCfg, unlocked)
     self.spellText:SetPoint("RIGHT", self.timeText, "LEFT", -4, 0)
 
     self.spellText:SetShown(unitCfg.showSpellName ~= false)
-    self.timeText:SetShown(unitCfg.showCastTime ~= false)
+    self.showTime = unitCfg.showCastTime ~= false
+    self.timeText:SetShown(self.showTime)
 
     frame:SetFrameStrata(appearance.frameStrata or "MEDIUM")
 
@@ -309,8 +330,9 @@ function CastBar:LayoutPips(numStages, totalDuration)
 
         pip:SetColorTexture(0, 0, 0, 0.8)
         pip:ClearAllPoints()
-        pip:SetPoint("TOP", self.bar, "TOPLEFT", self.bar:GetWidth() * fraction, 0)
-        pip:SetPoint("BOTTOM", self.bar, "BOTTOMLEFT", self.bar:GetWidth() * fraction, 0)
+        local offset = (self.barWidth or 0) * fraction
+        pip:SetPoint("TOP", self.bar, "TOPLEFT", offset, 0)
+        pip:SetPoint("BOTTOM", self.bar, "BOTTOMLEFT", offset, 0)
         pip:Show()
     end
 end
@@ -336,7 +358,7 @@ function CastBar:LayoutLatency(totalDuration)
     if not world or world <= 0 then return end
 
     local fraction = math.min((world / 1000) / totalDuration, 1)
-    local width = self.bar:GetWidth() * fraction
+    local width = (self.barWidth or 0) * fraction
     if width < 1 then return end
 
     self.latency:ClearAllPoints()
@@ -480,6 +502,16 @@ function CastBar:Refresh()
         else
             self:ClearPips()
         end
+
+        -- Draw the opening frame here rather than waiting for OnUpdate. The
+        -- frame is shown at the bottom of this function, so without this the
+        -- bar's first visible frame still carries the previous cast's fill -
+        -- which, after a cast that completed, is a full bar flashing for one
+        -- frame every time a new cast starts.
+        self.lastTenths = nil
+        if not self:UpdateProgress(GetTime()) then
+            self.bar:SetValue(0)
+        end
     elseif self:StartSecretTimer(cast) then
         -- Nothing about the timing is readable, so there is no honest number to
         -- print alongside a bar the client is animating for us. A channel here
@@ -543,6 +575,7 @@ end
 function CastBar:Hide()
     self.fading = nil
     self.failed = nil
+    self.lastTenths = nil
     self.cast = nil
     self.mode = nil
     self:ClearSecretTimer()
@@ -572,6 +605,7 @@ function CastBar:ShowPreview()
     self.cast = nil
     self.fading = nil
     self.failed = nil
+    self.lastTenths = nil
     self:ClearSecretTimer()
 
     self.frame:SetAlpha(1)
@@ -599,6 +633,41 @@ end
 -- Per-frame update
 --------------------------------------------------------------------------------
 
+-- Draw the cast at time `now`. Returns false once it has run past its end.
+--
+-- Everything the bar shows per frame lives here, and it is deliberately down to
+-- a single SetValue in the common case: the spark rides the fill texture (see
+-- Layout) and the countdown only touches its FontString when the digit it shows
+-- actually changes.
+function CastBar:UpdateProgress(now)
+    local total = self.endTime - self.startTime
+    if total <= 0 then return false end
+
+    local elapsed = now - self.startTime
+    if elapsed >= total then return false end
+
+    local progress = elapsed / total
+    self.bar:SetValue(self.cast.channeling and (1 - progress) or progress)
+
+    if self.showTime then
+        -- The label only ever renders one decimal place, so the string is only
+        -- rebuilt when that decimal moves: ten times a second rather than once
+        -- per frame. Every SetText makes the FontString re-measure its string
+        -- width, and at 144fps better than nine in ten of those measurements
+        -- were producing the identical string.
+        --
+        -- Truncated rather than rounded, so the countdown never claims more time
+        -- remains than actually does.
+        local tenths = math.floor((self.endTime - now) * 10)
+        if tenths ~= self.lastTenths then
+            self.lastTenths = tenths
+            self.timeText:SetText(string.format("%.1f", tenths / 10))
+        end
+    end
+
+    return true
+end
+
 function CastBar:OnUpdate(elapsed)
     if self.previewing then return end
 
@@ -614,29 +683,8 @@ function CastBar:OnUpdate(elapsed)
 
     if self.mode ~= "manual" or not self.cast then return end
 
-    local total = self.endTime - self.startTime
-    if total <= 0 then
+    if not self:UpdateProgress(GetTime()) then
         self:Stop()
-        return
-    end
-
-    local elapsedTime = GetTime() - self.startTime
-    if elapsedTime >= total then
-        self:Stop()
-        return
-    end
-
-    local progress = elapsedTime / total
-    local fill = self.cast.channeling and (1 - progress) or progress
-    self.bar:SetValue(fill)
-
-    if self.spark:IsShown() then
-        self.spark:ClearAllPoints()
-        self.spark:SetPoint("CENTER", self.bar, "LEFT", self.bar:GetWidth() * fill, 0)
-    end
-
-    if self.timeText:IsShown() then
-        self.timeText:SetText(string.format("%.1f", self.endTime - GetTime()))
     end
 end
 

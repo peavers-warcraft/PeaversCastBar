@@ -136,14 +136,27 @@ end
 
 -- Re-run layout only. Used by the Cooldown Manager listener, where nothing about
 -- the config changed - only the row the bars are measuring against.
+--
+-- The listener fires for any hooked viewer, and the buff rows in particular
+-- resize whenever a tracked buff comes or goes, which in combat is often. Layout
+-- is not free - fonts, backdrop colours, a dozen anchors - so a bar whose width
+-- has not actually moved is skipped. Anchored bars are relaid out regardless,
+-- since their anchor may have changed without any width changing.
 function Core:RelayoutMatched()
     local config = PCB.Config
 
     for _, unit in ipairs(PCB.Units) do
         local bar = self.bars[unit.key]
         local unitCfg = config:GetUnit(unit.key)
-        if bar and unitCfg and (unitCfg.matchCooldownManager or unitCfg.anchorToCooldownManager) then
-            bar:Layout(config, unitCfg, self.unlocked)
+        if bar and unitCfg then
+            if unitCfg.anchorToCooldownManager then
+                bar:Layout(config, unitCfg, self.unlocked)
+            elseif unitCfg.matchCooldownManager then
+                local width = bar:ResolveWidth(unitCfg)
+                if math.abs(width - (bar.frame:GetWidth() or 0)) > 0.5 then
+                    bar:Layout(config, unitCfg, self.unlocked)
+                end
+            end
         end
     end
 end
