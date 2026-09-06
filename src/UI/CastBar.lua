@@ -229,7 +229,8 @@ function CastBar:Layout(appearance, unitCfg, unlocked)
     self.bar:ClearAllPoints()
     self.bar:SetPoint("TOPLEFT", frame, "TOPLEFT", leftPad, -INSET)
     self.bar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -rightPad, INSET)
-    self.bar:SetStatusBarTexture(appearance.barTexture or "Interface\\TargetingFrame\\UI-StatusBar")
+    self.bar:SetStatusBarTexture(appearance.barTexture
+        or PeaversCommons.ConfigManager.GetDefaultBarTexture())
 
     -- Derived arithmetically instead of read back with GetWidth. The bar is
     -- sized by its anchors, and an anchor-derived size is not resolved until the
