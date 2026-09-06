@@ -14,6 +14,11 @@
 -- which is where the checking happens.
 --------------------------------------------------------------------------------
 
+-- Substituting client globals is the entire job of this file, so the language
+-- server's objection to redefining them is correct about the code and wrong
+-- about the intent. Scoped to this file; addon code still gets the warning.
+---@diagnostic disable: duplicate-set-field
+
 local harness = {}
 
 ---This file is `<PeaversCastBar>/tests/harness.lua`, whatever the checkout is
@@ -127,6 +132,10 @@ function harness.load()
 			c.spellID, c.empowered or false, c.numStages
 	end
 
+	-- Only the two Utils helpers CastBar.lua actually calls. Filling in the rest
+	-- of PeaversCommons to satisfy the type would be a lie about what this test
+	-- exercises, and a second copy of a library to keep in step.
+	---@diagnostic disable-next-line: missing-fields
 	_G.PeaversCommons = {
 		Utils = {
 			GetDefaultFont = function() return "Fonts\\FRIZQT__.TTF" end,
