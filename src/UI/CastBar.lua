@@ -386,7 +386,8 @@ end
 -- only truth-tested, never compared, and notInterruptible goes through ReadBool
 -- because a secret boolean cannot legally be tested at all.
 local function ReadCast(unit)
-    local name, text, texture, startTime, endTime, _, castID, notInterruptible = Safe(UnitCastingInfo, unit)
+    local name, text, texture, startTime, endTime, _, castID, notInterruptible, spellID =
+        Safe(UnitCastingInfo, unit)
     if Present(name) then
         return {
             name = text or name,
@@ -396,10 +397,11 @@ local function ReadCast(unit)
             notInterruptible = ReadBool(notInterruptible),
             channeling = false,
             castID = castID,
+            spellID = spellID,
         }
     end
 
-    local cName, cText, cTexture, cStart, cEnd, _, cNotInterruptible, _, isEmpowered, numStages =
+    local cName, cText, cTexture, cStart, cEnd, _, cNotInterruptible, cSpellID, isEmpowered, numStages =
         Safe(UnitChannelInfo, unit)
     if Present(cName) then
         return {
@@ -409,6 +411,9 @@ local function ReadCast(unit)
             endTime = cEnd,
             notInterruptible = ReadBool(cNotInterruptible),
             channeling = true,
+            -- Channels carry no cast GUID, so the spell is the only identity
+            -- they have to reject other attempts' events with.
+            spellID = cSpellID,
             empowered = ReadBool(isEmpowered),
             numStages = Number(numStages),
         }
@@ -687,11 +692,35 @@ function CastBar:OnUpdate(elapsed)
         return
     end
 
-    if self.mode ~= "manual" or not self.cast then return end
+    if not self.cast then return end
 
-    if not self:UpdateProgress(GetTime()) then
-        self:Stop()
+    if self.mode == "manual" then
+        if not self:UpdateProgress(GetTime()) then
+            self:Stop()
+        end
+        return
     end
+
+    -- The other two modes have no readable end time, so nothing here can run
+    -- them out; they clear only when their stop event arrives. Now that a stop
+    -- of the wrong kind is correctly ignored, that leaves them with no fallback
+    -- at all, so the unit is re-read a few times a second to catch a bar whose
+    -- own stop never turned up. Only reachable while restricted data is on
+    -- screen, and never on the manual path measured by the perf harness.
+    self.pollIn = (self.pollIn or 0) - elapsed
+    if self.pollIn <= 0 then
+        self.pollIn = 0.25
+        if not ReadCast(self.unit) then self:Stop() end
+    end
+end
+
+-- Compare one identity against another: true when they are known to differ,
+-- false when they are known to match, nil when the question cannot be asked --
+-- either side missing, or restricted, since a secret value may not be compared.
+local function Differs(mine, theirs)
+    if IsSecret(mine) or IsSecret(theirs) then return nil end
+    if mine == nil or theirs == nil then return nil end
+    return mine ~= theirs
 end
 
 -- True when this event belongs to some other cast attempt than the one on the
@@ -703,26 +732,63 @@ end
 -- never started. Without this check each of those turned the running bar red and
 -- stopped it, while the real cast carried on invisibly underneath.
 --
--- Unknowns deliberately fall through as "mine": channels carry no cast GUID at
--- all, and a restricted GUID cannot legally be compared. Both cases keep the old
--- behaviour of trusting the event rather than risking a bar that never clears.
-function CastBar:IsForeignCast(castGUID)
-    local mine = self.castID
-    if mine == nil or castGUID == nil then return false end
-    if IsSecret(mine) or IsSecret(castGUID) then return false end
-    return mine ~= castGUID
+-- A hard cast is matched on its cast GUID, which is unique to the attempt. A
+-- channel has no GUID -- UnitChannelInfo does not return one -- so it falls back
+-- to the spell, which cannot tell two attempts at the same spell apart but does
+-- reject every event belonging to a different spell. Before this fallback
+-- existed the whole check was inert for channels: self.castID was always nil, so
+-- every event on the unit was accepted as the channel's own.
+--
+-- Unknowns still fall through as "mine", which keeps a bar that cannot be
+-- identified clearable rather than stuck.
+function CastBar:IsForeignEvent(castGUID, spellID)
+    local byGUID = Differs(self.castID, castGUID)
+    if byGUID ~= nil then return byGUID end
+
+    local cast = self.cast
+    local bySpell = cast and Differs(cast.spellID, spellID)
+    if bySpell ~= nil then return bySpell end
+
+    return false
 end
+
+-- Which kind of thing each stop event is able to end: true for a channel, false
+-- for a hard cast.
+--
+-- The client ends a channel with CHANNEL_STOP (or EMPOWER_STOP) and a hard cast
+-- with the plain STOP, never the other way round, so a stop of the wrong kind
+-- provably belongs to something other than what is on the bar. That is not a
+-- theoretical case: a channel queued at the tail of a hard cast has its
+-- CHANNEL_START predicted locally the moment it is sent, while the finished
+-- cast's STOP still has to come back from the server, so the two arrive in
+-- either order depending on latency. Whenever the STOP lost that race it was
+-- ending the channel that had just started -- which is exactly the "channels
+-- sometimes don't show" this guard fixes, and why it looked random.
+local STOP_ENDS_CHANNEL = {
+    UNIT_SPELLCAST_STOP = false,
+    UNIT_SPELLCAST_CHANNEL_STOP = true,
+    UNIT_SPELLCAST_EMPOWER_STOP = true,
+}
 
 -- Every spellcast event for the unit funnels through here. Re-reading the unit
 -- is cheaper and far less error prone than tracking timings by hand; only the
 -- identity of the cast is tracked, and only to reject events from other casts.
-function CastBar:OnEvent(event, _, castGUID)
+function CastBar:OnEvent(event, _, castGUID, spellID)
+    local endsChannel = STOP_ENDS_CHANNEL[event]
+
     if event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
-        if self:IsForeignCast(castGUID) then return end
+        -- A channel cannot fail. It is committed the instant it starts, and one
+        -- that gets kicked reports CHANNEL_STOP, so a FAILED landing during a
+        -- channel always belongs to some other press on the unit.
+        if self.cast and self.cast.channeling and event == "UNIT_SPELLCAST_FAILED" then return end
+        if self:IsForeignEvent(castGUID, spellID) then return end
         self:Stop(true)
-    elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
-        or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-        if self:IsForeignCast(castGUID) then return end
+    elseif endsChannel ~= nil then
+        local cast = self.cast
+        if cast then
+            if endsChannel ~= cast.channeling then return end
+            if self:IsForeignEvent(castGUID, spellID) then return end
+        end
         self:Stop()
     else
         self:Refresh()
