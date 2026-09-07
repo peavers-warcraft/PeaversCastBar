@@ -24,6 +24,7 @@ src\Utils\Config.lua
 src\UI\CastBar.lua
 src\Core\Core.lua
 src\Utils\ConfigUI.lua
+src\Utils\EditMode.lua
 src\Utils\Patrons.lua
 
 src\Main.lua
