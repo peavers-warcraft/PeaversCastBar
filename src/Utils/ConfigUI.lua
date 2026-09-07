@@ -38,9 +38,7 @@ end
 -- should do.
 
 function ConfigUI:BuildInfoPage(parentFrame)
-    local width = ResolveWidth(parentFrame)
-
-    ConfigUIUtils.BuildInfoPage(parentFrame, "Cast Bar", {
+    ConfigUIUtils.BuildInfoPageWithEditMode(parentFrame, "Cast Bar", {
         "An ultra-lightweight replacement for the default cast bar, for the " ..
             "player, target, focus and pet - with the option to take its width " ..
             "straight from Blizzard's Cooldown Manager so the two line up exactly.",
@@ -75,24 +73,17 @@ function ConfigUI:BuildInfoPage(parentFrame)
             "of step with the cast. The whole addon is around 80 KB with no " ..
             "bundled libraries. Every one of those numbers is re-measured on " ..
             "each release and published in the README.",
-    })
-
-    -- Sits under the generated blocks; BuildInfoPage leaves the height set, so
-    -- the button is placed against that and the height extended to cover it.
-    local y = -(parentFrame:GetHeight() - 20)
-
-    local unlockBtn = W:CreateButton(parentFrame, PCB.Core.unlocked and "Lock bars" or "Unlock bars to drag", {
-        width = width,
-        variant = "primary",
-        height = 28,
-        onClick = function(button)
-            local unlocked = PCB.Core:ToggleUnlocked()
-            button:SetLabel(unlocked and "Lock bars" or "Unlock bars to drag")
+    }, {
+        title = "the cast bars",
+        select = "any of the four bars",
+        reset = function()
+            PCB.Config:Reset()
+            if PCB.ApplySetting then PCB.ApplySetting() end
+            if PeaversCommons.EditModePanel then
+                PeaversCommons.EditModePanel:Refresh()
+            end
         end,
     })
-    unlockBtn:SetPoint("TOPLEFT", INDENT, y)
-
-    parentFrame:SetHeight(math.abs(y) + 50)
 end
 
 --------------------------------------------------------------------------------
