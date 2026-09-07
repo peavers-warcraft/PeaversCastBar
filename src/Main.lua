@@ -43,6 +43,11 @@ PeaversCommons.Events:Init(addonName, function()
     PCB.Config:Initialize()
     PCB.Core:Initialize()
 
+    -- After Core, because it registers the bars Core builds.
+    if PCB.EditMode then
+        PCB.EditMode:Register()
+    end
+
     if PCB.ConfigUI and PCB.ConfigUI.Initialize then
         PCB.ConfigUI:Initialize()
     end
