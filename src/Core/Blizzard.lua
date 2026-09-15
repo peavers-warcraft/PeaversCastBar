@@ -20,6 +20,13 @@ PCB.Blizzard = Blizzard
 --
 -- The restore arguments mirror what Blizzard's own FrameXML passes: the second
 -- and third flags are "show trade skills" and "show the uninterruptible shield".
+--
+-- Named rather than referenced, which is what lets one list serve every client:
+-- a name that resolves to nothing is a unit with no default bar here, and
+-- GetFrame hands back nil so it is quietly left alone. All four exist on the
+-- Classic clients. The old CastingBarFrame global, which does not, is
+-- deliberately absent - the player's bar is PlayerCastingBarFrame everywhere
+-- this addon loads.
 local FRAMES = {
     player = { name = "PlayerCastingBarFrame", restore = { "player", true, false } },
     target = { name = "TargetFrameSpellBar", restore = { "target", false, true } },

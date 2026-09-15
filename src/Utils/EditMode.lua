@@ -243,12 +243,32 @@ EditMode.ENTRIES = {
 -- Registration
 --------------------------------------------------------------------------------
 
+-- The sections this client has any use for.
+--
+-- The Cooldown Manager section goes whole where there is no Cooldown Manager.
+-- Its settings are still honoured - a bar falls back to its own width and
+-- position - but the controls would be four choices that visibly do nothing.
+-- Dropped rather than hidden row by row, because a schema groups rows into
+-- sections before either surface asks which are hidden, so hiding all four would
+-- leave an empty heading behind. Retail is untouched.
+local function SectionsForClient(sections)
+    if PCB.CooldownManager:IsSupported() then return sections end
+
+    local out = {}
+    for _, section in ipairs(sections) do
+        if section.key ~= "cooldown" then
+            out[#out + 1] = section
+        end
+    end
+    return out
+end
+
 function EditMode:BuildSchema()
     if self.schema then return self.schema end
 
     self.schema = PeaversCommons.SettingsSchema:New({
         config = PCB.Config,
-        sections = self.SECTIONS,
+        sections = SectionsForClient(self.SECTIONS),
         entries = self.ENTRIES,
         scope = function(config, unitKey) return config:GetUnit(unitKey) or {} end,
         scopeDefaults = function(config, unitKey)

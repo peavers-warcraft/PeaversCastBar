@@ -45,6 +45,36 @@ local CAST_EVENTS = {
 -- Event plumbing
 --------------------------------------------------------------------------------
 
+-- Does this client know the event at all?
+--
+-- Registering a name the client has never heard of is a hard error raised
+-- wherever the registration happens - here, halfway through the login callback -
+-- so an unknown name costs not one event but every event after it, leaving four
+-- bars built and deaf. Asked by trying it on a frame of our own and handing it
+-- straight back, which needs nothing from the client but the registration
+-- itself. Cached: BindEvents runs the whole list again on every settings change.
+local eventKnown = {}
+local eventProbe
+
+local function IsEventKnown(event)
+    local known = eventKnown[event]
+    if known == nil then
+        eventProbe = eventProbe or CreateFrame("Frame")
+        known = pcall(eventProbe.RegisterEvent, eventProbe, event)
+        if known then eventProbe:UnregisterEvent(event) end
+        eventKnown[event] = known
+    end
+    return known
+end
+
+-- The shared PeaversCommons frame registers a name unguarded, so the asking has
+-- to happen on this side of it.
+local function RegisterShared(events, event, handler)
+    if IsEventKnown(event) then
+        events:RegisterEvent(event, handler)
+    end
+end
+
 -- Point a bar's event frame at a unit token. Called again whenever the token
 -- changes under it, which is what vehicle handling below relies on.
 local function BindEvents(bar, unit)
@@ -54,9 +84,11 @@ local function BindEvents(bar, unit)
     if not unit then return end
 
     for _, event in ipairs(CAST_EVENTS) do
-        -- Guarded: an event that does not exist on an older interface version
-        -- would otherwise take the whole registration loop down with it.
-        pcall(frame.RegisterUnitEvent, frame, event, unit)
+        -- Asked, not attempted-and-caught: an unknown name would take the rest
+        -- of the loop with it, and unlike a pcall per rebind the answer is cached.
+        if IsEventKnown(event) then
+            frame:RegisterUnitEvent(event, unit)
+        end
     end
 end
 
@@ -208,25 +240,27 @@ function Core:Initialize()
     -- time; RegisterUnitEvent follows the token, but a bar showing the previous
     -- unit's cast has to be re-read by hand.
     local events = PeaversCommons.Events
-    events:RegisterEvent("PLAYER_TARGET_CHANGED", function()
+    RegisterShared(events, "PLAYER_TARGET_CHANGED", function()
         local bar = self.bars.target
         if bar and bar.enabled then bar:Hide(); bar:Refresh() end
     end)
-    events:RegisterEvent("PLAYER_FOCUS_CHANGED", function()
+    RegisterShared(events, "PLAYER_FOCUS_CHANGED", function()
         local bar = self.bars.focus
         if bar and bar.enabled then bar:Hide(); bar:Refresh() end
     end)
-    events:RegisterEvent("UNIT_PET", function()
+    RegisterShared(events, "UNIT_PET", function()
         local bar = self.bars.pet
         if bar and bar.enabled then bar:Hide(); bar:Refresh() end
     end)
 
-    events:RegisterEvent("UNIT_ENTERED_VEHICLE", function() self:UpdatePlayerUnit() end)
-    events:RegisterEvent("UNIT_EXITED_VEHICLE", function() self:UpdatePlayerUnit() end)
+    -- The vehicle pair is the likeliest to be missing: a client with no vehicles
+    -- has no name for them, and the player bar never needs to follow its token.
+    RegisterShared(events, "UNIT_ENTERED_VEHICLE", function() self:UpdatePlayerUnit() end)
+    RegisterShared(events, "UNIT_EXITED_VEHICLE", function() self:UpdatePlayerUnit() end)
 
     -- Blizzard rebuilds its cast bars during a loading screen, so the
     -- suppression has to be reasserted on the far side of one.
-    events:RegisterEvent("PLAYER_ENTERING_WORLD", function()
+    RegisterShared(events, "PLAYER_ENTERING_WORLD", function()
         self:ApplyConfig()
     end)
 

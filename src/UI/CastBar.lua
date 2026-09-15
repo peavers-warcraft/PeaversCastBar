@@ -22,7 +22,6 @@ local CooldownManager = PCB.CooldownManager
 
 local Safe = Secret.Safe
 local IsSecret = Secret.IsSecret
-local ReadBool = Secret.ReadBool
 local Present = Secret.Present
 local Number = Secret.Number
 
@@ -380,10 +379,49 @@ function CastBar:SetBarColor(key, fallback)
     self.bar:SetStatusBarColor(r, g, b)
 end
 
+-- notInterruptible, accepted only when it really is a flag.
+--
+-- The slots are the retail ones on every client this ships to: the eighth for a
+-- cast, the seventh for a channel. The Classic clients fill them inconsistently
+-- - Era and Anniversary leave the cast's eighth nil where Mists puts a boolean
+-- in it, and the older channel signature put the spell id in the seventh, a
+-- number a plain truth test would call true and paint every channel unkickable.
+-- So anything that is not a boolean means "the client did not say", which falls
+-- through to the ordinary colour rather than claiming the cast cannot be kicked.
+local function ReadInterruptFlag(value)
+    if IsSecret(value) then return nil end
+    if type(value) ~= "boolean" then return nil end
+    return value
+end
+
+-- A spell id worth keeping as the cast's identity. A secret one is kept exactly
+-- as it came, since Differs knows not to compare it and dropping it would leave
+-- a restricted channel with no identity at all; anything else has to be a plain
+-- number. On a client whose channel signature is shifted by one the eighth slot
+-- holds something that is not an id, and handed to IsForeignEvent it would have
+-- the bar reject its own stop event and sit there until the next cast.
+local function ReadSpellID(value)
+    if IsSecret(value) then return value end
+    if type(value) ~= "number" then return nil end
+    return value
+end
+
+-- Whether this genuinely is an empowered channel. The empower events are valid
+-- names on the Classic clients and simply never fire, but UnitChannelInfo still
+-- has a ninth slot there, and whatever sits in it must not be allowed to talk
+-- the bar into drawing stage pips. A real boolean and a client that can actually
+-- be asked for a stage duration are both required.
+local function ReadEmpowered(value)
+    if not Secret.Caps.empower then return nil end
+    if IsSecret(value) then return nil end
+    if type(value) ~= "boolean" then return nil end
+    return value
+end
+
 -- Read whatever the unit is doing right now, or nil when it is idle.
 --
 -- Every field can come back secret inside an encounter. Names and textures are
--- only truth-tested, never compared, and notInterruptible goes through ReadBool
+-- only truth-tested, never compared, and the flags go through the readers above
 -- because a secret boolean cannot legally be tested at all.
 local function ReadCast(unit)
     local name, text, texture, startTime, endTime, _, castID, notInterruptible, spellID =
@@ -394,10 +432,10 @@ local function ReadCast(unit)
             texture = texture,
             startTime = startTime,
             endTime = endTime,
-            notInterruptible = ReadBool(notInterruptible),
+            notInterruptible = ReadInterruptFlag(notInterruptible),
             channeling = false,
             castID = castID,
-            spellID = spellID,
+            spellID = ReadSpellID(spellID),
         }
     end
 
@@ -409,12 +447,12 @@ local function ReadCast(unit)
             texture = cTexture,
             startTime = cStart,
             endTime = cEnd,
-            notInterruptible = ReadBool(cNotInterruptible),
+            notInterruptible = ReadInterruptFlag(cNotInterruptible),
             channeling = true,
             -- Channels carry no cast GUID, so the spell is the only identity
             -- they have to reject other attempts' events with.
-            spellID = cSpellID,
-            empowered = ReadBool(isEmpowered),
+            spellID = ReadSpellID(cSpellID),
+            empowered = ReadEmpowered(isEmpowered),
             numStages = Number(numStages),
         }
     end

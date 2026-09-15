@@ -83,6 +83,11 @@ do
     Secret.Caps.timerDuration = (type(probe.SetTimerDuration) == "function")
         and (type(C_DurationUtil) == "table")
         and (type(C_DurationUtil.CreateDuration) == "function")
+
+    -- Evoker empowerment. The empower events are valid names on the Classic
+    -- clients even though an empowered cast cannot happen there, so only the
+    -- stage-duration call - the one the pips need - answers this honestly.
+    Secret.Caps.empower = type(GetUnitEmpowerStageDuration) == "function"
 end
 
 return Secret

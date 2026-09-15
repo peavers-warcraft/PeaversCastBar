@@ -79,6 +79,35 @@ function CooldownManager:IsAvailable()
     return false
 end
 
+-- Whether this client has a Cooldown Manager at all.
+--
+-- A different question from IsAvailable, and the one the settings need: the
+-- viewers are load-on-demand, so on retail every one of them can be absent for a
+-- whole session and still be a keypress away. Asking about the client instead -
+-- the API namespace, or failing that the addon being listed at all - is what
+-- keeps the settings on retail and drops them on a Classic client, where there
+-- is no Cooldown Manager and a bar keeps its own width and position.
+--
+-- Three nets rather than one, because the two answers are not equally cheap to
+-- get wrong: a false where the client does have a Cooldown Manager would take
+-- the settings away from the people most likely to want them, so saying no
+-- takes the API namespace, the addon listing and any viewer already on screen
+-- all missing together.
+function CooldownManager:IsSupported()
+    if _G.C_CooldownViewer ~= nil then return true end
+
+    if C_AddOns and type(C_AddOns.GetAddOnInfo) == "function" then
+        local ok, name = pcall(C_AddOns.GetAddOnInfo, "Blizzard_CooldownViewer")
+        if ok and name then return true end
+    end
+
+    for _, viewer in ipairs(self.Viewers) do
+        if type(_G[viewer.key]) == "table" then return true end
+    end
+
+    return false
+end
+
 -- The viewer's width expressed in `relativeTo`'s coordinate space.
 --
 -- Both frames can sit at different effective scales - the Cooldown Manager is
@@ -128,9 +157,15 @@ end
 -- Blizzard_CooldownViewer is load-on-demand, so the viewers can appear long
 -- after this addon has finished initialising. EventUtil handles the case where
 -- it is already loaded, and the notify re-runs every matched layout once it is.
+--
+-- Skipped where there is no Cooldown Manager: waiting on an addon the client has
+-- never heard of is a callback that never fires at best, and asking about an
+-- unknown addon name is not something every client answers politely.
 function CooldownManager:Initialize()
+    if not self:IsSupported() then return end
+
     if type(EventUtil) == "table" and type(EventUtil.ContinueOnAddOnLoaded) == "function" then
-        EventUtil.ContinueOnAddOnLoaded("Blizzard_CooldownViewer", function()
+        pcall(EventUtil.ContinueOnAddOnLoaded, "Blizzard_CooldownViewer", function()
             Notify()
         end)
     end
