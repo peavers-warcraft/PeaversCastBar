@@ -30,6 +30,24 @@ CooldownManager.Viewers = {
 
 -- A row narrower than this is empty or mid-layout rather than genuinely tiny,
 -- and matching it would collapse the cast bar to nothing.
+-- WoW Forever ships the whole Cooldown Manager and none of it works: on the beta
+-- Blizzard_CooldownViewer is listed and loaded, C_CooldownViewer is complete, all
+-- four viewers exist hidden at width 1, and IsCooldownViewerAvailable() returns
+-- true - while no player can use it and Blizzard have said it will not be
+-- available. So this is the one question here asked as a flavour rather than a
+-- capability: every capability signal answers yes. Identified by interface range
+-- because Forever reports WOW_PROJECT_ID as mainline, and derived locally because
+-- a released PeaversCommons has no isForever. If the feature ships, delete this
+-- and let IsCooldownViewerAvailable answer.
+local IS_FOREVER = (function()
+    local compat = _G.PeaversCommons and _G.PeaversCommons.Compat
+    if compat and compat.isForever ~= nil then
+        return compat.isForever and true or false
+    end
+    local interface = tonumber((select(4, GetBuildInfo()))) or 0
+    return interface >= 16000 and interface < 20000
+end)()
+
 local MIN_USABLE_WIDTH = 20
 
 local listeners = {}
@@ -94,6 +112,8 @@ end
 -- takes the API namespace, the addon listing and any viewer already on screen
 -- all missing together.
 function CooldownManager:IsSupported()
+    if IS_FOREVER then return false end
+
     if _G.C_CooldownViewer ~= nil then return true end
 
     if C_AddOns and type(C_AddOns.GetAddOnInfo) == "function" then
@@ -137,6 +157,15 @@ end
 function CooldownManager:AnchorFrame(frame, key, side, gap)
     local viewer = self:GetFrame(key)
     if not viewer then return false end
+
+    -- Existing is not the same as usable. A viewer can be present and hidden at
+    -- a placeholder size - every one of Forever's sits hidden at width 1 - and
+    -- pinning to it would park the bar at an invisible frame's position instead
+    -- of leaving it where the player put it. GetMatchedWidth already refuses the
+    -- same frame; anchoring has to refuse it too.
+    if not viewer:IsShown() then return false end
+    local width = viewer:GetWidth()
+    if not width or width < MIN_USABLE_WIDTH then return false end
 
     gap = gap or 6
 
