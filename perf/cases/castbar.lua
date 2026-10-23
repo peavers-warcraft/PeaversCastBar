@@ -12,6 +12,7 @@ local Stubs = dofile(HARNESS_LIB .. "/wow-stubs.lua").Install()
 -- Addon-side scaffolding the file expects at load time
 --------------------------------------------------------------------------------
 
+---@diagnostic disable-next-line: missing-fields
 _G.PeaversCommons = {
     Utils = {
         GetDefaultFont = function() return "Fonts\\FRIZQT__.TTF" end,
