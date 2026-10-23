@@ -17,21 +17,7 @@ if not PeaversCommons then
     return
 end
 
-local W = PeaversCommons.Widgets
-local ConfigManager = PeaversCommons.ConfigManager
 local ConfigUIUtils = PeaversCommons.ConfigUIUtils
-
-local CooldownManager = PCB.CooldownManager
-
-local INDENT = 25
-
-local function ResolveWidth(parentFrame)
-    local parentWidth = parentFrame:GetWidth() or 0
-    if parentWidth > 100 then
-        return parentWidth - (INDENT * 2) - 10
-    end
-    return 360
-end
 
 -- Applying a setting lives with the addon's schema now, in EditMode.lua, so the
 -- settings page and the Edit Mode panel cannot disagree about what a change
